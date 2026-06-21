@@ -29,10 +29,14 @@ async function run() {
     const db = client.db('book-hub');
     const bookCollection = db.collection('books');
 
+
+    // server check
     app.get('/', (req, res) => {
       res.send('Book HUb server is running!')
     });
 
+
+    // Books endpoint
     // GET /books?page=1&limit=12&category=fiction&search=harry
     app.get('/books', async (req, res) => {
       console.log(req.query);
@@ -41,25 +45,40 @@ async function run() {
         const limit = parseInt(req.query.limit) || 12;
         const category = req.query.category || '';
         const search = req.query.search || '';
+        const sort = req.query.sort || 'latest';
         const skip = (page - 1) * limit;
 
-        const filter = { }; // $ne: { status: 'pending' } // only show approved books
+        const filter = {};
 
         if (category) {
-          filter.category = category; // e.g. "fiction", "sci-fi-fantasy"
+          filter.category = category;
         }
 
         if (search) {
-          // Search in both book name and description (case-insensitive)
           filter.$or = [
             { title: { $regex: search, $options: 'i' } },
             { description: { $regex: search, $options: 'i' } },
           ];
         }
 
+        // ── Sort logic 
+        let sortQuery = {};
+
+        if (sort === 'latest') {
+          sortQuery = { createdAt: -1 };           // newest first
+        } else if (sort === 'price-low') {
+          sortQuery = { deliveryFee: 1 };          // lowest fee first
+        } else if (sort === 'price-high') {
+          sortQuery = { deliveryFee: -1 };         // highest fee first
+        } else if (sort === 'available') {
+          filter.status = 'published';             // only show published books
+          sortQuery = { createdAt: -1 };           // among those, newest first
+        }
+
         const total = await bookCollection.countDocuments(filter);
         const books = await bookCollection
           .find(filter)
+          .sort(sortQuery)
           .skip(skip)
           .limit(limit)
           .toArray();
@@ -74,6 +93,10 @@ async function run() {
         res.status(500).json({ message: 'Failed to fetch books', error: e.message });
       }
     });
+
+
+
+
 
   } finally {
     // Ensures that the client will close when you finish/error
