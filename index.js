@@ -28,6 +28,7 @@ async function run() {
 
     const db = client.db('book-hub');
     const bookCollection = db.collection('books');
+    const transactionCollection = db.collection('transactions');
 
 
     // server check
@@ -126,6 +127,26 @@ async function run() {
       }
     });
 
+    app.post('/transactions', async (req, res) => {
+      try {
+        const transaction = req.body;
+
+        // Guard: if same Stripe session already saved, skip insert
+        const existing = await transactionCollection.findOne({
+          sessionId: transaction.sessionId
+        });
+
+        if (existing) {
+          return res.json({ success: true, duplicate: true });
+        }
+
+        const result = await transactionCollection.insertOne(transaction);
+        res.json(result);
+
+      } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+      }
+    });
 
   } finally {
     // Ensures that the client will close when you finish/error
