@@ -108,6 +108,24 @@ async function run() {
     });
 
 
+    // GET /featured-books
+    app.get('/featured-books', async (req, res) => {
+      try {
+        const books = await bookCollection
+          .find({ status: 'published' })
+          .sort({ totalDeliveries: -1 })
+          .limit(8)
+          .toArray();
+
+        res.json(books);
+      } catch (e) {
+        res.status(500).json({
+          message: 'Failed to fetch featured books',
+          error: e.message,
+        });
+      }
+    });
+
 
   } finally {
     // Ensures that the client will close when you finish/error
