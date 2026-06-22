@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 const app = express();
 
@@ -36,10 +36,10 @@ async function run() {
     });
 
 
-    // Books endpoint
+    // Books endpoint 1------------------------------------------
     // GET /books?page=1&limit=12&category=fiction&search=harry
     app.get('/books', async (req, res) => {
-      console.log(req.query);
+
       try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 12;
@@ -95,6 +95,17 @@ async function run() {
     });
 
 
+    // ── Get single book detail ──
+    // GET /books/:id
+    app.get('/books/:id', async (req, res) => {
+      try {
+        const book = await bookCollection.findOne({ _id: new ObjectId(req.params.id) });
+        if (!book) return res.status(404).json({ message: 'Book not found' });
+        res.json(book);
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to fetch book', error: e.message });
+      }
+    });
 
 
 
