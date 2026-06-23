@@ -41,9 +41,16 @@ const verifyToken = async (req, res, next) => {
   try {
     const { payload } = await jwtVerify(token, JWKS);
     req.user = payload; // saving the payload
+
+    const { librarianID } = req.params;
+    const isLibrarian = librarianID === payload.id;
+    if (!isLibrarian) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     next();
   } catch (error) {
-    return res.status(403).json({ message: "Forbidden" });
+    return res.status(403).json({ message: "Forbidden", error, });
   }
 };
 
@@ -53,6 +60,7 @@ const verifyToken = async (req, res, next) => {
 // Admin can also pass (admin has all librarian powers)
 // ─────────────────────────────────────────────
 const verifyLibrarian = (req, res, next) => {
+
   const role = req.user?.userRole;
   if (role !== 'librarian' && role !== 'admin') {
     return res.status(403).json({ message: 'Forbidden - Librarian access required' });
@@ -171,13 +179,18 @@ async function run() {
 
 
     // GET /librarian/books
-    app.get('/librarian/books', verifyToken, verifyLibrarian, async (req, res) => {
+    app.get('/librarian/books/:librarianID', verifyToken, verifyLibrarian, async (req, res) => {
+      // app.get('/librarian/books/:librarianID', async (req, res) => {
+      const { librarianID } = req.params;
+
       try {
         const books = await bookCollection
           .find({ librarianId: req.user.id })
+          // .find({ librarianId: librarianID })
           .sort({ createdAt: -1 })
           .toArray();
-        res.json(books);
+
+        res.json({ success: true, books, });
       } catch (e) {
         res.status(500).json({ message: 'Failed to fetch your books', error: e.message });
       }
