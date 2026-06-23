@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { createRemoteJWKSet, jwtVerify } = require("jose-cjs");
 
 const app = express();
 
@@ -21,6 +22,28 @@ const client = new MongoClient(uri, {
   }
 });
 
+const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks`));
+
+const verifyToken = async (req, res, next) => {
+  const authHeader = req?.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+    console.log(payload);
+    next();
+  } catch (error) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+};
+
+
 async function run() {
   try {
 
@@ -30,7 +53,7 @@ async function run() {
     const bookCollection = db.collection('books');
     const transactionCollection = db.collection('transactions');
     const reviewsCollection = db.collection('reviews');
-    const deliveriesCollection = db.collection('deliveries');
+    const deliveryCollection = db.collection('deliveries');
 
 
     // server check
@@ -111,7 +134,7 @@ async function run() {
     });
 
 
-    // GET /featured-books
+    // GET FEATURED-BOOKS
     app.get('/featured-books', async (req, res) => {
       try {
         const books = await bookCollection
@@ -130,13 +153,29 @@ async function run() {
     });
 
 
+    //GET: DELIVERIES for users,
+    app.get('/user/deliveries/:uid', verifyToken, async (req, res) => {
+      try {
+        const { uid } = req.params;
 
+        const deliveries = await deliveryCollection
+          .find({ userId: uid })
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        res.json(deliveries);
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to fetch deliveries', error: e.message });
+      }
+    });
+
+    // POST: DELIVERIES
     app.post('/deliveries', async (req, res) => {
       try {
         const deliveryData = req.body;
 
         // Guard: if same Stripe session delivery already saved, skip insert
-        const existing = await deliveriesCollection.findOne({
+        const existing = await deliveryCollection.findOne({
           sessionId: deliveryData.sessionId
         });
 
@@ -144,7 +183,7 @@ async function run() {
           return res.json({ success: true, duplicate: true });
         }
 
-        const result = await deliveriesCollection.insertOne(deliveryData);
+        const result = await deliveryCollection.insertOne(deliveryData);
         res.json(result);
 
       } catch (err) {
@@ -153,7 +192,7 @@ async function run() {
     });
 
 
-
+    // POST: TRANSACTION
     app.post('/transactions', async (req, res) => {
       try {
         const transaction = req.body;
