@@ -24,11 +24,15 @@ const client = new MongoClient(uri, {
 
 const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks`));
 
+// ─────────────────────────────────────────────
+// MIDDLEWARE 1: verifyToken
+// ─────────────────────────────────────────────
 const verifyToken = async (req, res, next) => {
   const authHeader = req?.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ message: "Unauthorized" });
   }
+
   const token = authHeader.split(" ")[1];
   if (!token) {
     return res.status(401).json({ message: "Unauthorized" });
@@ -36,11 +40,24 @@ const verifyToken = async (req, res, next) => {
 
   try {
     const { payload } = await jwtVerify(token, JWKS);
-    console.log(payload);
+    req.user = payload; // saving the payload
     next();
   } catch (error) {
     return res.status(403).json({ message: "Forbidden" });
   }
+};
+
+
+// ─────────────────────────────────────────────
+// MIDDLEWARE 2: verifyLibrarian
+// Admin can also pass (admin has all librarian powers)
+// ─────────────────────────────────────────────
+const verifyLibrarian = (req, res, next) => {
+  const role = req.user?.userRole;
+  if (role !== 'librarian' && role !== 'admin') {
+    return res.status(403).json({ message: 'Forbidden - Librarian access required' });
+  }
+  next();
 };
 
 
@@ -153,23 +170,44 @@ async function run() {
     });
 
 
-    //GET: DELIVERIES for users,
-    app.get('/user/deliveries/:uid', async (req, res) => {
+    // GET /librarian/books
+    app.get('/librarian/books', verifyToken, verifyLibrarian, async (req, res) => {
+      try {
+        const books = await bookCollection
+          .find({ librarianId: req.user.id })
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.json(books);
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to fetch your books', error: e.message });
+      }
+    });
+
+
+
+    // GET: DELIVERIES for users      -------------token verify
+    app.get('/user/deliveries/:uid', verifyToken, async (req, res) => {
       try {
         const { uid } = req.params;
 
         const deliveries = await deliveryCollection
           .find({ userId: uid })
-          .sort({ createdAt: -1 })
+          .sort({ requestedAt: -1 })
           .toArray();
 
-        res.json(deliveries);
+        res.json({
+          totalDelivery: deliveries.length,
+          deliveries,
+        });
       } catch (e) {
-        res.status(500).json({ message: 'Failed to fetch deliveries', error: e.message });
+        res.status(500).json({
+          message: 'Failed to fetch deliveries',
+          error: e.message,
+        });
       }
     });
 
-    // POST: DELIVERIES
+    // POST: DELIVERIES          --------------token verify needed
     app.post('/deliveries', async (req, res) => {
       try {
         const deliveryData = req.body;
@@ -193,19 +231,30 @@ async function run() {
 
 
 
-    //GET: TRANSACTION for users,
-    app.get('/user/transactions/:uid', async (req, res) => {
+    // GET: TRANSACTIONS for users          --------------token verify
+    app.get('/user/transactions/:uid', verifyToken, async (req, res) => {
       try {
         const { uid } = req.params;
 
-        const deliveries = await transactionCollection
+        const transactions = await transactionCollection
           .find({ userId: uid })
-          .sort({ createdAt: -1 })
+          .sort({ paidAt: -1 })
           .toArray();
 
-        res.json(deliveries);
+        const totalSpending = transactions.reduce(
+          (sum, transaction) => sum + (Number(transaction.amount) || 0),
+          0
+        );
+
+        res.json({
+          totalSpending,
+          transactions,
+        });
       } catch (e) {
-        res.status(500).json({ message: 'Failed to fetch deliveries', error: e.message });
+        res.status(500).json({
+          message: 'Failed to fetch transactions',
+          error: e.message,
+        });
       }
     });
 
