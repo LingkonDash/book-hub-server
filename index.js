@@ -154,7 +154,7 @@ async function run() {
 
 
     //GET: DELIVERIES for users,
-    app.get('/user/deliveries/:uid', verifyToken, async (req, res) => {
+    app.get('/user/deliveries/:uid', async (req, res) => {
       try {
         const { uid } = req.params;
 
@@ -188,6 +188,24 @@ async function run() {
 
       } catch (err) {
         res.status(500).json({ success: false, message: err.message });
+      }
+    });
+
+
+
+    //GET: TRANSACTION for users,
+    app.get('/user/transactions/:uid', async (req, res) => {
+      try {
+        const { uid } = req.params;
+
+        const deliveries = await transactionCollection
+          .find({ userId: uid })
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        res.json(deliveries);
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to fetch deliveries', error: e.message });
       }
     });
 
