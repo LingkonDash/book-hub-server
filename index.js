@@ -29,6 +29,8 @@ async function run() {
     const db = client.db('book-hub');
     const bookCollection = db.collection('books');
     const transactionCollection = db.collection('transactions');
+    const reviewsCollection = db.collection('reviews');
+    const deliveriesCollection = db.collection('deliveries');
 
 
     // server check
@@ -126,6 +128,31 @@ async function run() {
         });
       }
     });
+
+
+
+    app.post('/deliveries', async (req, res) => {
+      try {
+        const deliveryData = req.body;
+
+        // Guard: if same Stripe session delivery already saved, skip insert
+        const existing = await deliveriesCollection.findOne({
+          sessionId: deliveryData.sessionId
+        });
+
+        if (existing) {
+          return res.json({ success: true, duplicate: true });
+        }
+
+        const result = await deliveriesCollection.insertOne(deliveryData);
+        res.json(result);
+
+      } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+      }
+    });
+
+
 
     app.post('/transactions', async (req, res) => {
       try {
