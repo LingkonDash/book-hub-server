@@ -54,12 +54,8 @@ const verifyToken = async (req, res, next) => {
 // ─────────────────────────────────────────────
 const verifyLibrarian = (req, res, next) => {
 
-
-  const { librarianID } = req.params;
-  const isLibrarian = librarianID === req.user.id;
-
   const role = req.user?.userRole;
-  if (role !== 'librarian' && role !== 'admin' || !isLibrarian) {
+  if (role !== 'librarian' && role !== 'admin') {
     return res.status(403).json({ message: 'Forbidden - Librarian access required' });
   }
   next();
@@ -231,23 +227,43 @@ async function run() {
     });
 
 
-    // GET /librarian/books/:librarianID       ------------------add query functionality for searching or sorting and add pagination
-    app.get('/librarian/books/:librarianID', verifyToken, verifyLibrarian, async (req, res) => {
-      // app.get('/librarian/books/:librarianID', async (req, res) => {
-      const { librarianID } = req.params;
+    // GET /librarian/books/:librarianID
+    app.get(
+      '/librarian/books/:librarianID',
+      verifyToken,
+      verifyLibrarian,
+      async (req, res) => {
+        try {
+          const page = parseInt(req.query.page) || 1;
+          const limit = 10;
+          const skip = (page - 1) * limit;
 
-      try {
-        const books = await bookCollection
-          .find({ librarianId: req.user.id })
-          // .find({ librarianId: librarianID })
-          .sort({ createdAt: -1 })
-          .toArray();
+          const filter = {
+            librarianId: req.user.id,
+          };
 
-        res.json({ success: true, books, });
-      } catch (e) {
-        res.status(500).json({ message: 'Failed to fetch your books', error: e.message });
+          const totalBooks = await bookCollection.countDocuments(filter);
+
+          const books = await bookCollection
+            .find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .toArray();
+
+          res.json({
+            books,
+            totalPage: Math.ceil(totalBooks / limit),
+            currentPage: page,
+          });
+        } catch (e) {
+          res.status(500).json({
+            message: 'Failed to fetch your books',
+            error: e.message,
+          });
+        }
       }
-    });
+    );
 
 
     // POST /librarian/books
@@ -263,7 +279,6 @@ async function run() {
         console.log(book);
 
         const result = await bookCollection.insertOne(book);
-        console.log(result);
         res.json(result);
       } catch (e) {
         res.status(500).json({ message: 'Failed to add book', error: e.message });
