@@ -276,8 +276,6 @@ async function run() {
           updatedAt: new Date(),
         };
 
-        console.log(book);
-
         const result = await bookCollection.insertOne(book);
         res.json(result);
       } catch (e) {
@@ -296,6 +294,33 @@ async function run() {
         res.json({ success: true, deliveries, });
       } catch (e) {
         res.status(500).json({ message: 'Failed to fetch deliveries', error: e.message });
+      }
+    });
+
+
+    // PATCH /librarian/deliveries/:id/status
+    app.patch('/librarian/deliveries/:id/status', verifyToken, verifyLibrarian, async (req, res) => {
+      try {
+        const { status } = req.body;
+        const allowed = ['pending', 'dispatched', 'delivered'];
+        if (!allowed.includes(status)) {
+          return res.status(400).json({ message: 'Invalid status value' });
+        }
+
+        const delivery = await deliveryCollection.findOne({ _id: new ObjectId(req.params.id) });
+        if (!delivery) return res.status(404).json({ message: 'Delivery not found' });
+
+        if (delivery.librarianId !== req.user.id) {
+          return res.status(403).json({ message: 'You can only update your own deliveries' });
+        }
+
+        const result = await deliveryCollection.updateOne(
+          { _id: new ObjectId(req.params.id) },
+          { $set: { deliveryStatus: status, updatedAt: new Date() } }
+        );
+        res.json({ message: `Delivery status updated to ${status}`, result, });
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to update delivery status', error: e.message });
       }
     });
 
