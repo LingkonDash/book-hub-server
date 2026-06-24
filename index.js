@@ -155,6 +155,62 @@ async function run() {
       }
     });
 
+    // ── Update single book detail ──
+    // PATCH /books/:id
+    app.patch('/books/:id', verifyToken, verifyLibrarian, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updatedBook = req.body;
+
+        const result = await bookCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              ...updatedBook,
+              updatedAt: new Date()
+            },
+          }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: 'Book not found' });
+        }
+
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({
+          message: 'Failed to update book',
+          error: e.message,
+        });
+      }
+    });
+
+
+    // ── Delete single book ──
+    // DELETE /books/:id
+    app.delete('/books/:id', verifyToken, verifyLibrarian, async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const result = await bookCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({
+            message: 'Book not found',
+          });
+        }
+
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({
+          message: 'Failed to delete book',
+          error: e.message,
+        });
+      }
+    });
+
 
     // GET FEATURED-BOOKS
     app.get('/featured-books', async (req, res) => {
@@ -175,7 +231,7 @@ async function run() {
     });
 
 
-    // GET /librarian/books
+    // GET /librarian/books/:librarianID       ------------------add query functionality for searching or sorting and add pagination
     app.get('/librarian/books/:librarianID', verifyToken, verifyLibrarian, async (req, res) => {
       // app.get('/librarian/books/:librarianID', async (req, res) => {
       const { librarianID } = req.params;
@@ -194,6 +250,27 @@ async function run() {
     });
 
 
+    // POST /librarian/books
+    app.post('/librarian/books/:librarianID', verifyToken, verifyLibrarian, async (req, res) => {
+      try {
+        const book = {
+          ...req.body,
+          status: 'pending',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        console.log(book);
+
+        const result = await bookCollection.insertOne(book);
+        console.log(result);
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to add book', error: e.message });
+      }
+    });
+
+
     // GET /librarian/deliveries  — deliveries for this librarian's books
     app.get('/librarian/deliveries/:librarianID', verifyToken, verifyLibrarian, async (req, res) => {
       try {
@@ -204,6 +281,27 @@ async function run() {
         res.json({ success: true, deliveries, });
       } catch (e) {
         res.status(500).json({ message: 'Failed to fetch deliveries', error: e.message });
+      }
+    });
+
+
+
+    // GET /librarian/transactions/:librarianID
+    app.get('/librarian/transactions/:librarianID', verifyToken, verifyLibrarian, async (req, res) => {
+      try {
+
+        const transactions = await transactionCollection
+          .find({ librarianId: req.user.id })
+          .sort({ paidAt: -1 })
+          .toArray();
+
+        const totalEarnings = transactions.reduce(
+          (sum, t) => sum + (Number(t.amount) || 0), 0
+        );
+
+        res.json({ totalEarnings, transactions });
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to fetch transactions', error: e.message });
       }
     });
 
