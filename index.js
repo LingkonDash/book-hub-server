@@ -41,13 +41,6 @@ const verifyToken = async (req, res, next) => {
   try {
     const { payload } = await jwtVerify(token, JWKS);
     req.user = payload; // saving the payload
-
-    const { librarianID } = req.params;
-    const isLibrarian = librarianID === payload.id;
-    if (!isLibrarian) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
     next();
   } catch (error) {
     return res.status(403).json({ message: "Forbidden", error, });
@@ -61,8 +54,12 @@ const verifyToken = async (req, res, next) => {
 // ─────────────────────────────────────────────
 const verifyLibrarian = (req, res, next) => {
 
+
+  const { librarianID } = req.params;
+  const isLibrarian = librarianID === req.user.id;
+
   const role = req.user?.userRole;
-  if (role !== 'librarian' && role !== 'admin') {
+  if (role !== 'librarian' && role !== 'admin' || !isLibrarian) {
     return res.status(403).json({ message: 'Forbidden - Librarian access required' });
   }
   next();
@@ -193,6 +190,20 @@ async function run() {
         res.json({ success: true, books, });
       } catch (e) {
         res.status(500).json({ message: 'Failed to fetch your books', error: e.message });
+      }
+    });
+
+
+    // GET /librarian/deliveries  — deliveries for this librarian's books
+    app.get('/librarian/deliveries/:librarianID', verifyToken, verifyLibrarian, async (req, res) => {
+      try {
+        const deliveries = await deliveryCollection
+          .find({ librarianId: req.user.id })
+          .sort({ requestedAt: -1 })
+          .toArray();
+        res.json({ success: true, deliveries, });
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to fetch deliveries', error: e.message });
       }
     });
 
