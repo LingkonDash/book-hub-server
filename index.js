@@ -216,7 +216,7 @@ async function run() {
           .sort({ totalDeliveries: -1 })
           .limit(8)
           .toArray();
-
+        console.log(books);
         res.json(books);
       } catch (e) {
         res.status(500).json({
@@ -318,11 +318,44 @@ async function run() {
           { _id: new ObjectId(req.params.id) },
           { $set: { deliveryStatus: status, updatedAt: new Date() } }
         );
+
+        const { bookId } = req.body;
+
+        if (status === 'delivered') {
+          await bookCollection.updateOne(
+            { _id: new ObjectId(bookId) },
+            {
+              $inc: {
+                totalDeliveries: 1,
+              },
+            }
+          );
+        }
+
         res.json({ message: `Delivery status updated to ${status}`, result, });
       } catch (e) {
         res.status(500).json({ message: 'Failed to update delivery status', error: e.message });
       }
     });
+
+    // ── Get reviews for a specific user ──
+    // GET /user/reviews/:userId
+    app.get('/user/reviews/:userId', verifyToken, async (req, res) => {
+      try {
+        const reviews = await reviewsCollection
+          .find({ userId: req.user.id })
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        res.json({ success: true, reviews, });
+      } catch (e) {
+        res.status(500).json({
+          message: 'Failed to fetch reviews',
+          error: e.message,
+        });
+      }
+    });
+
 
     // ── Get reviews for a specific book ──
     // GET /reviews/:bookId
@@ -369,7 +402,7 @@ async function run() {
     app.post('/reviews', verifyToken, async (req, res) => {
 
       try {
-        const { bookId, rating, user, comment } = req.body;
+        const { bookId, bookTitle, bookAuthor, coverImage, rating, user, comment } = req.body;
 
         // Check if already reviewed
         const alreadyReviewed = await reviewsCollection.findOne({
@@ -385,6 +418,9 @@ async function run() {
 
         const review = {
           bookId,
+          bookTitle,
+          bookAuthor,
+          coverImage,
           userId: req.user.id,
           user,
           rating: Number(rating),
