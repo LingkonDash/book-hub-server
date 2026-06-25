@@ -92,7 +92,7 @@ async function run() {
         const sort = req.query.sort || 'latest';
         const skip = (page - 1) * limit;
 
-        const filter = {};
+        const filter = { status: 'published' };
 
         if (category) {
           filter.category = category;
@@ -324,6 +324,146 @@ async function run() {
       }
     });
 
+    // ── Get reviews for a specific book ──
+    // GET /reviews/:bookId
+    app.get('/reviews/:bookId', async (req, res) => {
+      try {
+        const { bookId } = req.params;
+
+        const reviews = await reviewsCollection
+          .find({ bookId })
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        const avgResult = await reviewsCollection
+          .aggregate([
+            { $match: { bookId } },
+            {
+              $group: {
+                _id: null,
+                avgRating: { $avg: '$rating' },
+              },
+            },
+          ])
+          .toArray();
+
+        const avgRating = avgResult.length
+          ? Number(avgResult[0].avgRating.toFixed(1))
+          : 0;
+
+        res.json({
+          reviews,
+          avgRating,
+        });
+      } catch (e) {
+        res.status(500).json({
+          message: 'Failed to fetch reviews',
+          error: e.message,
+        });
+      }
+    });
+
+
+    // ── Post a review — only if user has a "delivered" delivery for this book ──
+    // POST /reviews
+    app.post('/reviews', verifyToken, async (req, res) => {
+
+      try {
+        const { bookId, rating, user, comment } = req.body;
+
+        // Check if already reviewed
+        const alreadyReviewed = await reviewsCollection.findOne({
+          bookId,
+          userId: req.user.id,
+        });
+
+        if (alreadyReviewed) {
+          return res.status(400).json({
+            message: 'You have already reviewed this book',
+          });
+        }
+
+        const review = {
+          bookId,
+          userId: req.user.id,
+          user,
+          rating: Number(rating),
+          comment,
+          createdAt: new Date(),
+        };
+
+        const result = await reviewsCollection.insertOne(review);
+
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({
+          message: 'Failed to add review',
+          error: e.message,
+        });
+      }
+    });
+
+    // ── Update a review ──
+    // PATCH /reviews/:reviewId
+    app.patch('/reviews/:reviewId', verifyToken, async (req, res) => {
+      try {
+        const { reviewId } = req.params;
+        const { rating, comment } = req.body;
+
+        const review = await reviewsCollection.findOne({
+          _id: new ObjectId(reviewId),
+        });
+
+        if (!review) {
+          return res.status(404).json({
+            message: 'Review not found',
+          });
+        }
+
+        if (review.userId !== req.user.id) {
+          return res.status(403).json({
+            message: 'You can only edit your own review',
+          });
+        }
+
+        const result = await reviewsCollection.updateOne(
+          { _id: new ObjectId(reviewId) },
+          {
+            $set: {
+              rating: Number(rating),
+              comment,
+              updatedAt: new Date(),
+            },
+          }
+        );
+
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({
+          message: 'Failed to update review',
+          error: e.message,
+        });
+      }
+    });
+
+    // ── Delete a review ──
+    // DELETE /reviews/:reviewId
+    app.delete('/reviews/:reviewId', verifyToken, async (req, res) => {
+      try {
+        const { reviewId } = req.params;
+
+        const result = await reviewsCollection.deleteOne({
+          _id: new ObjectId(reviewId),
+        });
+
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({
+          message: 'Failed to delete review',
+          error: e.message,
+        });
+      }
+    });
 
 
     // GET /librarian/transactions/:librarianID
