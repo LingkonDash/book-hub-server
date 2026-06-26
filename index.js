@@ -229,7 +229,6 @@ async function run() {
           .sort({ totalDeliveries: -1 })
           .limit(8)
           .toArray();
-        console.log(books);
         res.json(books);
       } catch (e) {
         res.status(500).json({
@@ -637,11 +636,12 @@ async function run() {
     // ADMIN ROUTES — verifyToken + verifyAdmin
     // ═══════════════════════════════════════════
 
-    // GET /admin/users
+    // GET /admin/users done!
     app.get('/admin/users', verifyToken, verifyAdmin, async (req, res) => {
       try {
         const users = await userCollection
           .find()
+          .sort({createdAt: -1})
           .toArray();
         res.json(users);
       } catch (e) {
@@ -649,35 +649,35 @@ async function run() {
       }
     });
 
-    // PATCH /admin/users/:id/role
+    // PATCH /admin/users/:id/role  done!
     app.patch('/admin/users/:id/role', verifyToken, verifyAdmin, async (req, res) => {
+      const { userRole } = req.body;
       try {
-        const { role } = req.body;
         const allowed = ['user', 'librarian', 'admin'];
-        if (!allowed.includes(role)) {
+        if (!allowed.includes(userRole)) {
           return res.status(400).json({ message: 'Invalid role' });
         }
 
-        await userCollection.updateOne(
+        const result = await userCollection.updateOne(
           { _id: new ObjectId(req.params.id) },
-          { $set: { role, updatedAt: new Date() } }
+          { $set: { userRole, updatedAt: new Date() } }
         );
-        res.json({ message: `User role updated to ${role}` });
+        res.json(result);
       } catch (e) {
         res.status(500).json({ message: 'Failed to update role', error: e.message });
       }
     });
 
-    // DELETE /admin/users/:id
+    // DELETE /admin/users/:id  done!
     app.delete('/admin/users/:id', verifyToken, verifyAdmin, async (req, res) => {
       try {
-        await userCollection.deleteOne({ _id: new ObjectId(req.params.id) });
-        res.json({ message: 'User deleted successfully' });
+        const result = await userCollection.deleteOne({ _id: new ObjectId(req.params.id) });
+        res.json(result);
       } catch (e) {
         res.status(500).json({ message: 'Failed to delete user', error: e.message });
       }
     });
- 
+
     // GET /admin/books  — all books regardless of status done!
     app.get('/admin/books', verifyToken, verifyAdmin, async (req, res) => {
       try {
@@ -687,7 +687,7 @@ async function run() {
         res.status(500).json({ message: 'Failed to fetch books', error: e.message });
       }
     });
-    
+
     // PATCH /admin/books/:id/approve  done!
     app.patch('/admin/books/:id/approve', verifyToken, verifyAdmin, async (req, res) => {
       try {
@@ -700,15 +700,15 @@ async function run() {
         res.status(500).json({ message: 'Failed to approve book', error: e.message });
       }
     });
-    
+
     // GET /admin/transactions done!
     app.get('/admin/transactions', verifyToken, verifyAdmin, async (req, res) => {
       try {
         const transactions = await transactionCollection
-        .find()
-        .sort({ paidAt: -1 })
+          .find()
+          .sort({ paidAt: -1 })
           .toArray();
-          res.json(transactions);
+        res.json(transactions);
       } catch (e) {
         res.status(500).json({ message: 'Failed to fetch transactions', error: e.message });
       }
@@ -718,9 +718,9 @@ async function run() {
     app.get('/admin/stats', verifyToken, verifyAdmin, async (req, res) => {
       try {
         const [totalUsers, totalBooks, pendingBooks, totalDeliveries, transactions] =
-        await Promise.all([
-          userCollection.countDocuments(),
-          bookCollection.countDocuments({ status: 'published' }),
+          await Promise.all([
+            userCollection.countDocuments(),
+            bookCollection.countDocuments({ status: 'published' }),
             bookCollection.countDocuments({ status: 'pending' }),
             deliveryCollection.countDocuments(),
             transactionCollection.find().toArray(),
