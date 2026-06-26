@@ -62,6 +62,18 @@ const verifyLibrarian = (req, res, next) => {
 };
 
 
+// ─────────────────────────────────────────────
+// MIDDLEWARE 3: verifyAdmin
+// ─────────────────────────────────────────────
+const verifyAdmin = (req, res, next) => {
+  const role = req.user?.userRole;
+  if (role !== 'admin') {
+    return res.status(403).json({ message: 'Forbidden - Admin access required' });
+  }
+  next();
+};
+
+
 async function run() {
   try {
 
@@ -72,6 +84,7 @@ async function run() {
     const transactionCollection = db.collection('transactions');
     const reviewsCollection = db.collection('reviews');
     const deliveryCollection = db.collection('deliveries');
+    const userCollection = db.collection('user');
 
 
     // server check
@@ -616,6 +629,108 @@ async function run() {
 
       } catch (err) {
         res.status(500).json({ success: false, message: err.message });
+      }
+    });
+
+
+    // ═══════════════════════════════════════════
+    // ADMIN ROUTES — verifyToken + verifyAdmin
+    // ═══════════════════════════════════════════
+
+    // GET /admin/users
+    app.get('/admin/users', verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const users = await userCollection
+          .find()
+          .toArray();
+        res.json(users);
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to fetch users', error: e.message });
+      }
+    });
+
+    // PATCH /admin/users/:id/role
+    app.patch('/admin/users/:id/role', verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const { role } = req.body;
+        const allowed = ['user', 'librarian', 'admin'];
+        if (!allowed.includes(role)) {
+          return res.status(400).json({ message: 'Invalid role' });
+        }
+
+        await userCollection.updateOne(
+          { _id: new ObjectId(req.params.id) },
+          { $set: { role, updatedAt: new Date() } }
+        );
+        res.json({ message: `User role updated to ${role}` });
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to update role', error: e.message });
+      }
+    });
+
+    // DELETE /admin/users/:id
+    app.delete('/admin/users/:id', verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        await userCollection.deleteOne({ _id: new ObjectId(req.params.id) });
+        res.json({ message: 'User deleted successfully' });
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to delete user', error: e.message });
+      }
+    });
+ 
+    // GET /admin/books  — all books regardless of status done!
+    app.get('/admin/books', verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const books = await bookCollection.find().sort({ createdAt: -1 }).toArray();
+        res.json(books);
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to fetch books', error: e.message });
+      }
+    });
+    
+    // PATCH /admin/books/:id/approve  done!
+    app.patch('/admin/books/:id/approve', verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const result = await bookCollection.updateOne(
+          { _id: new ObjectId(req.params.id) },
+          { $set: { status: 'published', updatedAt: new Date() } }
+        );
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to approve book', error: e.message });
+      }
+    });
+    
+    // GET /admin/transactions done!
+    app.get('/admin/transactions', verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const transactions = await transactionCollection
+        .find()
+        .sort({ paidAt: -1 })
+          .toArray();
+          res.json(transactions);
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to fetch transactions', error: e.message });
+      }
+    });
+
+    // GET /admin/stats done!
+    app.get('/admin/stats', verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const [totalUsers, totalBooks, pendingBooks, totalDeliveries, transactions] =
+        await Promise.all([
+          userCollection.countDocuments(),
+          bookCollection.countDocuments({ status: 'published' }),
+            bookCollection.countDocuments({ status: 'pending' }),
+            deliveryCollection.countDocuments(),
+            transactionCollection.find().toArray(),
+          ]);
+
+        const totalRevenue = transactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        res.json({ totalUsers, totalBooks, pendingBooks, totalDeliveries, totalRevenue });
+      } catch (e) {
+        res.status(500).json({ message: 'Failed to fetch stats', error: e.message });
       }
     });
 
