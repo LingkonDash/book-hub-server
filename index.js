@@ -734,6 +734,77 @@ async function run() {
       }
     });
 
+
+    app.get('/top-librarians', async (req, res) => {
+      try {
+
+        // Step 1: Aggregate deliveries to find top 3 librarians by 'delivered' status
+        const topLibrarians = await deliveryCollection.aggregate([
+          {
+            $match: { deliveryStatus: 'delivered' }
+          },
+          {
+            $group: {
+              _id: '$librarianId',
+              deliveryCount: { $sum: 1 }
+            }
+          },
+          {
+            $sort: { deliveryCount: -1 }
+          },
+          {
+            $limit: 3
+          }
+        ]).toArray();
+
+        if (topLibrarians.length === 0) {
+          return res.status(200).json([]);
+        }
+
+        // Step 2: Fetch user data for each librarian
+        const librarianIds = topLibrarians.map(l => new ObjectId(l._id));
+
+        const users = await userCollection
+          .find({ _id: { $in: librarianIds } })
+          .toArray();
+
+        // Step 3: Build a lookup map for quick access
+        const userMap = {};
+        users.forEach(u => {
+          userMap[u._id.toString()] = u;
+        });
+
+        // Step 4: Shape the response
+        const badges = ['🥇', '🥈', '🥉'];
+        const ratings = [4.9, 4.8, 4.7]; // static fallback since you don't have ratings in DB
+
+        const result = topLibrarians.map((librarian, index) => {
+          const user = userMap[librarian._id.toString()];
+          const name = user?.name || 'Unknown';
+
+          return {
+            id: index + 1,
+            name,
+            avatar: user?.image,
+            location: 'Dhaka, BD',
+            deliveries: librarian.deliveryCount,
+            rating: ratings[index],
+            specialty: 'General',
+            badge: badges[index],
+            rank: index + 1,
+          };
+        });
+
+        res.json(result);
+
+      } catch (error) {
+        console.error('Error fetching top librarians:', error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    });
+
+
+
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
