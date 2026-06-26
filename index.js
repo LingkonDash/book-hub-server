@@ -28,7 +28,7 @@ const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks
 // MIDDLEWARE 1: verifyToken
 // ─────────────────────────────────────────────
 const verifyToken = async (req, res, next) => {
-  const authHeader = req?.headers.authorization;
+  const authHeader = req?.headers?.authorization;
   if (!authHeader) {
     return res.status(401).json({ message: "Unauthorized" });
   }
@@ -641,7 +641,7 @@ async function run() {
       try {
         const users = await userCollection
           .find()
-          .sort({createdAt: -1})
+          .sort({ createdAt: -1 })
           .toArray();
         res.json(users);
       } catch (e) {
