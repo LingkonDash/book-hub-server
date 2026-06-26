@@ -535,7 +535,7 @@ async function run() {
 
 
 
-    // GET: DELIVERIES for users      -------------token verify
+    // GET: DELIVERIES for users     
     app.get('/user/deliveries/:uid', verifyToken, async (req, res) => {
       try {
         const { uid } = req.params;
@@ -557,8 +557,8 @@ async function run() {
       }
     });
 
-    // POST: DELIVERIES          --------------token verify needed
-    app.post('/deliveries', async (req, res) => {
+    // POST: DELIVERIES         
+    app.post('/deliveries', verifyToken,async (req, res) => {
       try {
         const deliveryData = req.body;
 
@@ -581,7 +581,7 @@ async function run() {
 
 
 
-    // GET: TRANSACTIONS for users          --------------token verify
+    // GET: TRANSACTIONS for users        
     app.get('/user/transactions/:uid', verifyToken, async (req, res) => {
       try {
         const { uid } = req.params;
@@ -610,7 +610,7 @@ async function run() {
 
 
     // POST: TRANSACTION
-    app.post('/transactions', async (req, res) => {
+    app.post('/transactions', verifyToken, async (req, res) => {
       try {
         const transaction = req.body;
 
